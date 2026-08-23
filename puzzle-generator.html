@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wordhunter — Puzzle Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14151A;
+    --paper: #EDEAE2;
+    --paper-dim: #A9A79E;
+    --amber: #E8A33D;
+    --redact: #C1443C;
+    --teal: #4C7C72;
+    --card: #1D1F26;
+    --border: #2f313c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  .stage { max-width: 720px; margin: 0 auto; padding: 28px 20px 80px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--amber); margin: 0 0 6px;
+  }
+  h1 { font-family: 'Special Elite', cursive; font-size: 28px; margin: 0 0 22px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  input[type="text"] {
+    flex: 1; min-width: 200px;
+    background: #14151A; border: 1px solid var(--border); border-radius: 5px;
+    color: var(--paper); padding: 11px 12px; font-family: 'Inter', sans-serif; font-size: 14px;
+  }
+  button {
+    background: var(--amber); color: var(--ink); border: none;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12.5px;
+    padding: 11px 18px; border-radius: 5px; cursor: pointer; letter-spacing: 0.02em;
+  }
+  button.secondary { background: transparent; color: var(--paper); border: 1px solid var(--border); }
+  button.small { padding: 6px 10px; font-size: 11px; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .status { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--paper-dim); margin-top: 10px; }
+
+  .candidate {
+    border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 10px;
+    background: #191b22;
+  }
+  .candidate.selected { border-color: var(--teal); }
+  .candidate-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .word-label { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; color: var(--amber); text-transform: uppercase; }
+  label.check { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--paper-dim); }
+
+  textarea.clue-edit {
+    width: 100%; background: #14151A; border: 1px solid var(--border); border-radius: 5px;
+    color: var(--paper); padding: 8px 10px; font-family: 'Inter', sans-serif; font-size: 13px;
+    resize: vertical; min-height: 40px; margin-bottom: 10px;
+  }
+
+  .chunk-editor { display: flex; align-items: center; flex-wrap: wrap; user-select: none; }
+  .letter {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px;
+    padding: 4px 1px; color: var(--paper);
+  }
+  .gap {
+    width: 10px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; position: relative;
+  }
+  .gap::before {
+    content: ''; width: 2px; height: 16px; background: var(--border); border-radius: 1px;
+  }
+  .gap.active::before { background: var(--amber); width: 3px; }
+  .chunk-preview {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--teal); margin-top: 8px;
+  }
+
+  .empty-state { color: var(--paper-dim); font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: center; padding: 30px 0; }
+
+  .export-box {
+    display: none;
+  }
+  .export-box.show { display: block; }
+  pre#jsonOut {
+    background: #0f1014; border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--paper); overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .footer-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .count-pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink);
+    background: var(--amber); padding: 3px 9px; border-radius: 20px; margin-left: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <p class="eyebrow">Content Pipeline</p>
+  <h1>Puzzle Generator</h1>
+
+  <div class="panel">
+    <div class="input-row">
+      <input type="text" id="themeInput" placeholder="Theme, e.g. 'Weather Phenomena', 'Space', 'Cooking'" value="Ocean Life">
+      <button id="generateBtn">Discover words</button>
+    </div>
+    <p class="status" id="status">Enter a theme and discover candidate words. Each is checked against a live dictionary before it's usable.</p>
+  </div>
+
+  <div class="panel" id="candidatesPanel" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <strong style="font-family:'JetBrains Mono',monospace; font-size:13px;">Candidates</strong>
+      <span id="selectedCount" class="count-pill">0 selected</span>
+    </div>
+    <div id="candidateList"></div>
+  </div>
+
+  <div class="panel export-box" id="exportBox">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <strong style="font-family:'JetBrains Mono',monospace; font-size:13px;">Puzzle JSON</strong>
+    </div>
+    <pre id="jsonOut"></pre>
+    <div class="footer-actions">
+      <button id="copyBtn">Copy JSON</button>
+      <button id="downloadBtn" class="secondary">Download .json</button>
+    </div>
+  </div>
+
+  <div class="footer-actions" id="buildRow" style="display:none;">
+    <button id="buildBtn" disabled>Build puzzle from selected words</button>
+  </div>
+</div>
+
+<script>
+const themeInput = document.getElementById('themeInput');
+const generateBtn = document.getElementById('generateBtn');
+const statusEl = document.getElementById('status');
+const candidatesPanel = document.getElementById('candidatesPanel');
+const candidateList = document.getElementById('candidateList');
+const selectedCountEl = document.getElementById('selectedCount');
+const buildRow = document.getElementById('buildRow');
+const buildBtn = document.getElementById('buildBtn');
+const exportBox = document.getElementById('exportBox');
+const jsonOut = document.getElementById('jsonOut');
+
+let candidates = []; // { word, definition, chunks: [], boundaries: Set, selected }
+
+// --- Heuristic syllable/chunk splitter (auto-suggestion only — always hand-editable after) ---
+function guessChunks(word) {
+  word = word.toLowerCase();
+  const vowels = "aeiouy";
+  const groups = [];
+  let i = 0;
+  while (i < word.length) {
+    const start = i;
+    while (i < word.length && !vowels.includes(word[i])) i++;
+    while (i < word.length && vowels.includes(word[i])) i++;
+    if (i === start) i++; // safety for any stray char
+    groups.push(word.slice(start, i));
+  }
+  // fold a trailing consonant-only group into the previous chunk
+  if (groups.length > 1 && !/[aeiouy]/.test(groups[groups.length - 1])) {
+    groups[groups.length - 2] += groups.pop();
+  }
+  // cap at 3 chunks max by merging smallest neighbors, to match typical game feel
+  while (groups.length > 3) {
+    let smallestIdx = 0;
+    for (let k = 1; k < groups.length - 1; k++) {
+      if (groups[k].length < groups[smallestIdx].length) smallestIdx = k;
+    }
+    if (smallestIdx === groups.length - 1) smallestIdx = groups.length - 2;
+    groups[smallestIdx] += groups[smallestIdx + 1];
+    groups.splice(smallestIdx + 1, 1);
+  }
+  return groups.length > 1 ? groups : [word];
+}
+
+function boundariesFromChunks(word, chunks) {
+  const b = new Set();
+  let pos = 0;
+  for (let i = 0; i < chunks.length - 1; i++) {
+    pos += chunks[i].length;
+    b.add(pos);
+  }
+  return b;
+}
+
+function chunksFromBoundaries(word, boundaries) {
+  const sorted = [...boundaries].sort((a, b) => a - b);
+  const chunks = [];
+  let prev = 0;
+  sorted.forEach(pos => { chunks.push(word.slice(prev, pos)); prev = pos; });
+  chunks.push(word.slice(prev));
+  return chunks;
+}
+
+function truncateDefinition(def) {
+  // keep clues short and puzzle-like, not full dictionary sentences
+  let d = def.split(';')[0].split(',')[0];
+  const words = d.split(' ');
+  if (words.length > 7) d = words.slice(0, 7).join(' ');
+  return d.replace(/\.$/, '');
+}
+
+async function discoverWords() {
+  const theme = themeInput.value.trim();
+  if (!theme) return;
+
+  generateBtn.disabled = true;
+  candidates = [];
+  candidateList.innerHTML = '';
+  candidatesPanel.style.display = 'none';
+  buildRow.style.display = 'none';
+  exportBox.classList.remove('show');
+  statusEl.textContent = `Searching for words related to "${theme}"...`;
+
+  let related = [];
+  try {
+    const res = await fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(theme)}&max=40`);
+    related = await res.json();
+  } catch (e) {
+    statusEl.textContent = 'Could not reach Datamuse API — check network access.';
+    generateBtn.disabled = false;
+    return;
+  }
+
+  const pool = related
+    .map(r => r.word.toLowerCase())
+    .filter(w => /^[a-z]+$/.test(w) && w.length >= 4 && w.length <= 12)
+    .slice(0, 16);
+
+  if (pool.length === 0) {
+    statusEl.textContent = 'No usable single-word candidates found — try a broader theme.';
+    generateBtn.disabled = false;
+    return;
+  }
+
+  candidatesPanel.style.display = 'block';
+  let checked = 0;
+
+  for (const word of pool) {
+    checked++;
+    statusEl.textContent = `Validating "${word}" (${checked}/${pool.length})...`;
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const rawDef = data[0]?.meanings?.[0]?.definitions?.[0]?.definition;
+      if (!rawDef) continue;
+
+      const chunks = guessChunks(word);
+      candidates.push({
+        word,
+        definition: truncateDefinition(rawDef),
+        chunks,
+        boundaries: boundariesFromChunks(word, chunks),
+        selected: candidates.length < 5, // pre-select first few for convenience
+      });
+    } catch (e) {
+      // skip words the dictionary can't validate
+    }
+    renderCandidates();
+  }
+
+  statusEl.textContent = `Done — ${candidates.length} of ${pool.length} candidates validated by the dictionary. Review clues and chunk splits, select 4–6, then build.`;
+  generateBtn.disabled = false;
+  buildRow.style.display = 'flex';
+  updateBuildState();
+}
+
+function renderCandidates() {
+  candidateList.innerHTML = '';
+  candidates.forEach((c, idx) => {
+    const card = document.createElement('div');
+    card.className = 'candidate' + (c.selected ? ' selected' : '');
+
+    const head = document.createElement('div');
+    head.className = 'candidate-head';
+    head.innerHTML = `
+      <span class="word-label">${c.word}</span>
+      <label class="check"><input type="checkbox" ${c.selected ? 'checked' : ''} data-idx="${idx}" class="sel-check"> use this</label>
+    `;
+    card.appendChild(head);
+
+    const clueEdit = document.createElement('textarea');
+    clueEdit.className = 'clue-edit';
+    clueEdit.value = c.definition;
+    clueEdit.addEventListener('input', () => { c.definition = clueEdit.value; });
+    card.appendChild(clueEdit);
+
+    const editorWrap = document.createElement('div');
+    editorWrap.className = 'chunk-editor';
+    renderChunkEditor(editorWrap, c);
+    card.appendChild(editorWrap);
+
+    const preview = document.createElement('div');
+    preview.className = 'chunk-preview';
+    preview.textContent = 'chunks: ' + c.chunks.join(' · ');
+    card.appendChild(preview);
+    c._previewEl = preview;
+
+    candidateList.appendChild(card);
+
+    card.querySelector('.sel-check').addEventListener('change', (e) => {
+      c.selected = e.target.checked;
+      card.classList.toggle('selected', c.selected);
+      updateBuildState();
+    });
+  });
+  updateBuildState();
+}
+
+function renderChunkEditor(container, c) {
+  container.innerHTML = '';
+  const word = c.word;
+  for (let i = 0; i < word.length; i++) {
+    const letter = document.createElement('span');
+    letter.className = 'letter';
+    letter.textContent = word[i].toUpperCase();
+    container.appendChild(letter);
+
+    if (i < word.length - 1) {
+      const pos = i + 1;
+      const gap = document.createElement('span');
+      gap.className = 'gap' + (c.boundaries.has(pos) ? ' active' : '');
+      gap.addEventListener('click', () => {
+        if (c.boundaries.has(pos)) c.boundaries.delete(pos);
+        else c.boundaries.add(pos);
+        c.chunks = chunksFromBoundaries(word, c.boundaries);
+        gap.classList.toggle('active');
+        c._previewEl.textContent = 'chunks: ' + c.chunks.join(' · ');
+      });
+      container.appendChild(gap);
+    }
+  }
+}
+
+function updateBuildState() {
+  const selected = candidates.filter(c => c.selected);
+  selectedCountEl.textContent = `${selected.length} selected`;
+  buildBtn.disabled = selected.length < 4 || selected.length > 8;
+}
+
+function buildPuzzle() {
+  const theme = themeInput.value.trim();
+  const selected = candidates.filter(c => c.selected);
+
+  const puzzle = selected.map(c => ({
+    clue: c.definition,
+    answer: c.word,
+    chunks: c.chunks,
+  }));
+
+  const output = {
+    theme,
+    generated_at: new Date().toISOString(),
+    source: "datamuse + dictionaryapi.dev (auto-suggested chunks, human-reviewed)",
+    puzzle,
+  };
+
+  jsonOut.textContent = JSON.stringify(output, null, 2);
+  exportBox.classList.add('show');
+  exportBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(jsonOut.textContent);
+  const btn = document.getElementById('copyBtn');
+  const original = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = original, 1200);
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([jsonOut.textContent], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const themeSlug = themeInput.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.href = url;
+  a.download = `puzzle-${themeSlug || 'theme'}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+generateBtn.addEventListener('click', discoverWords);
+buildBtn.addEventListener('click', buildPuzzle);
+themeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') discoverWords(); });
+</script>
+</body>
+</html>

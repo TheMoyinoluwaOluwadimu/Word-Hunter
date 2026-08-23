@@ -1,0 +1,47 @@
+{
+    "theme": "Ocean Life",
+    "generated_at": "2026-08-23T19:35:49.249Z",
+    "source": "datamuse + dictionaryapi.dev (auto-suggested chunks, human-reviewed)",
+    "puzzle": [
+      {
+        "clue": "A sailor or mariner",
+        "answer": "seafarer",
+        "chunks": [
+          "sea",
+          "fa",
+          "rer"
+        ]
+      },
+      {
+        "clue": "A hard substance made of the limestone",
+        "answer": "coral",
+        "chunks": [
+          "co",
+          "ral"
+        ]
+      },
+      {
+        "clue": "To consume (a liquid) through the mouth",
+        "answer": "drink",
+        "chunks": [
+          "drink"
+        ]
+      },
+      {
+        "clue": "A current of air or water running",
+        "answer": "eddy",
+        "chunks": [
+          "e",
+          "ddy"
+        ]
+      },
+      {
+        "clue": "Any of many colonial coelenterates that exist",
+        "answer": "hydroid",
+        "chunks": [
+          "hy",
+          "droid"
+        ]
+      }
+    ]
+  }

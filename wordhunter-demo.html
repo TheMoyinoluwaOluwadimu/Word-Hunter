@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wordhunter — Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14151A;
+    --ink-2: #1D1F26;
+    --paper: #EDEAE2;
+    --paper-dim: #A9A79E;
+    --amber: #E8A33D;
+    --amber-dim: #8a662a;
+    --redact: #C1443C;
+    --teal: #4C7C72;
+    --tile-border: #2B2D36;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+  .stage {
+    max-width: 460px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at top, rgba(232,163,61,0.06), transparent 60%),
+      var(--ink);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  /* case file header */
+  .header {
+    padding: 28px 22px 18px;
+    border-bottom: 1px dashed #3a3c46;
+    position: relative;
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 6px;
+  }
+  .title {
+    font-family: 'Special Elite', cursive;
+    font-size: 30px;
+    margin: 0;
+    letter-spacing: 0.5px;
+  }
+  .stamp {
+    position: absolute;
+    top: 26px; right: 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    border: 1.5px solid var(--redact);
+    color: var(--redact);
+    padding: 4px 8px;
+    transform: rotate(6deg);
+    border-radius: 3px;
+    opacity: 0.85;
+  }
+  .meta-row {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    border-bottom: 1px dashed #3a3c46;
+  }
+  .meta-item { display: flex; align-items: center; gap: 6px; }
+  .meta-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--redact); }
+  .streak { margin-left: auto; color: var(--amber); font-weight: 700; }
+
+  .theme-banner {
+    margin: 18px 22px 6px;
+    background: var(--amber);
+    color: var(--ink);
+    font-family: 'Special Elite', cursive;
+    font-size: 17px;
+    padding: 12px 16px;
+    border-radius: 2px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
+  }
+
+  .clues {
+    flex: 1;
+    padding: 10px 22px 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .clue-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 0;
+    border-bottom: 1px solid #24262f;
+  }
+  .clue-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .clue-text { font-size: 15px; color: var(--paper); flex: 1; }
+  .clue-text .info-btn {
+    background: none; border: 1px solid #3a3c46; color: var(--paper-dim);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    border-radius: 50%; width: 18px; height: 18px; line-height: 1;
+    cursor: pointer; margin-left: 8px; vertical-align: middle;
+  }
+
+  /* drop slots */
+  .slots { display: flex; gap: 6px; justify-content: flex-end; }
+  .slot {
+    min-width: 62px; min-height: 46px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(232,163,61,0.14);
+    border: 1.5px solid rgba(232,163,61,0.25);
+    transition: border-color .15s, background .15s;
+    padding: 2px;
+  }
+  .slot .tile { min-width: 0; width: 100%; }
+  .slot.hover-target { border-color: var(--amber); background: rgba(232,163,61,0.28); }
+  .slot.filled { border-color: var(--teal); background: var(--teal); }
+
+  .clue-row.solved .clue-text { color: var(--paper-dim); text-decoration: line-through; text-decoration-color: #3a3c46; }
+
+  /* shared tile pool */
+  .pool-section {
+    margin: 6px 22px 18px;
+    padding-top: 14px;
+    border-top: 1px dashed #3a3c46;
+  }
+  .pool { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tile {
+    min-width: 62px;
+    padding: 12px 10px;
+    background: #E8863D;
+    border: 1px solid #c96f2c;
+    color: #1a0e05;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    text-align: center;
+    border-radius: 5px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    transition: transform .1s, opacity .15s;
+  }
+  .tile.dragging {
+    position: fixed;
+    z-index: 999;
+    pointer-events: none;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+    opacity: 0.95;
+    cursor: grabbing;
+  }
+  .tile.placed { visibility: hidden; }
+  .tile.locked { cursor: default; opacity: 0.9; }
+  .tile.wrong-shake { animation: shake .3s; border-color: var(--redact); background: var(--redact); }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+  .slot .tile-in-slot {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 14px; color: #f4f2ea;
+  }
+
+  .definition-strip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--teal);
+    margin-top: 4px;
+    display: none;
+  }
+  .definition-strip.show { display: block; }
+
+  .footer-bar {
+    position: sticky; bottom: 0;
+    padding: 16px 22px 22px;
+    background: linear-gradient(to top, var(--ink) 60%, transparent);
+  }
+  .progress-track {
+    height: 6px; background: #24262f; border-radius: 3px; overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-fill {
+    height: 100%; background: var(--amber); width: 0%;
+    transition: width .3s ease;
+  }
+  .status-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--paper-dim); text-align: center;
+  }
+
+  .solved-overlay {
+    position: absolute; inset: 0;
+    background: rgba(20,21,26,0.97);
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 20px;
+  }
+  .solved-overlay.show { display: flex; }
+  .solved-overlay .big { font-family: 'Special Elite', cursive; font-size: 40px; color: var(--amber); margin: 0 0 8px; }
+  .solved-overlay .time { font-family: 'JetBrains Mono', monospace; font-size: 46px; font-weight: 700; margin: 6px 0 18px; }
+  .solved-overlay .fire { font-size: 20px; color: var(--amber); font-family: 'JetBrains Mono', monospace; margin-bottom: 26px; }
+  .solved-overlay button {
+    background: var(--amber); color: var(--ink); border: none;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px;
+    padding: 12px 22px; border-radius: 4px; cursor: pointer; letter-spacing: 0.04em;
+  }
+
+  .api-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #5a5c66;
+    text-align: center; padding: 0 22px 14px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="header">
+    <p class="eyebrow">Case File · Puzzle of the Day</p>
+    <h1 class="title">Wordhunter</h1>
+    <div class="stamp">LIVE DEMO</div>
+  </div>
+
+  <div class="meta-row">
+    <div class="meta-item"><span class="dot"></span><span id="timer">00:00</span></div>
+    <div class="streak">🔥 <span id="streak">10</span></div>
+  </div>
+
+  <div class="theme-banner">
+    <span id="themeLabel">Theme: Weather Phenomena</span>
+    <span style="font-size:13px;" id="clueCount">5 clues</span>
+  </div>
+
+  <div class="clues" id="clues"></div>
+
+  <div class="pool-section">
+    <div class="pool" id="pool"></div>
+  </div>
+
+  <div class="footer-bar">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="status-line" id="statusLine">Tap the tiles in order to solve each clue</div>
+  </div>
+
+  <div class="solved-overlay" id="solvedOverlay">
+    <p class="big">Solved!</p>
+    <div class="time" id="finalTime">00:00</div>
+    <div class="fire">🔥 <span id="finalStreak">11</span></div>
+    <button onclick="resetGame()">Play again</button>
+  </div>
+
+  <p class="api-note">Tap ⓘ for a live dictionary definition · fill every slot — correctness is only checked once the whole board is full · tap a filled slot to take a tile back</p>
+</div>
+
+<script>
+const PUZZLE_SOURCE = './Architecture.json';
+
+let PUZZLE = [];
+
+let filledSlotsCount = 0;
+let totalSlots = 0;
+let boardLocked = false;
+let startTime = null;
+let timerInterval = null;
+let streak = 12;
+
+const cluesEl = document.getElementById('clues');
+const poolEl = document.getElementById('pool');
+const timerEl = document.getElementById('timer');
+const progressFill = document.getElementById('progressFill');
+const statusLine = document.getElementById('statusLine');
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildBoard() {
+  cluesEl.innerHTML = '';
+  poolEl.innerHTML = '';
+  filledSlotsCount = 0;
+  boardLocked = false;
+  progressFill.style.width = '0%';
+  document.getElementById('solvedOverlay').classList.remove('show');
+  statusLine.textContent = 'Fill every slot, then it checks itself';
+  document.getElementById('clueCount').textContent = `${PUZZLE.length} clues`;
+
+  totalSlots = PUZZLE.reduce((sum, item) => sum + item.chunks.length, 0);
+
+  PUZZLE.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'clue-row';
+    row.dataset.index = idx;
+
+    row.innerHTML = `
+      <div class="clue-top">
+        <div class="clue-text">${item.clue}<button class="info-btn" title="Fetch definition">ⓘ</button></div>
+        <div class="slots"></div>
+      </div>
+      <div class="definition-strip"></div>
+    `;
+
+    const slotsWrap = row.querySelector('.slots');
+    item.chunks.forEach((_, slotIdx) => {
+      const s = document.createElement('div');
+      s.className = 'slot';
+      s.dataset.slotIndex = slotIdx;
+      s.dataset.clueIndex = idx;
+      s.addEventListener('click', () => releaseTileFromSlot(s));
+      slotsWrap.appendChild(s);
+    });
+
+    row.querySelector('.info-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      fetchDefinition(item.answer, row.querySelector('.definition-strip'));
+    });
+
+    cluesEl.appendChild(row);
+  });
+
+  // one shared pool holding every chunk from every clue, mixed together
+  const allTiles = [];
+  PUZZLE.forEach((item, clueIdx) => {
+    item.chunks.forEach((chunk, chunkIdx) => {
+      allTiles.push({ chunk, clueIdx, chunkIdx });
+    });
+  });
+  const shuffledTiles = shuffle(allTiles);
+
+  shuffledTiles.forEach(({ chunk, clueIdx, chunkIdx }) => {
+    const t = document.createElement('div');
+    t.className = 'tile';
+    t.textContent = chunk;
+    t.dataset.chunk = chunk;
+    t.dataset.clueIdx = clueIdx;
+    t.dataset.chunkIdx = chunkIdx;
+    attachDragHandlers(t);
+    poolEl.appendChild(t);
+  });
+}
+
+function attachDragHandlers(tileEl) {
+  let offsetX = 0, offsetY = 0;
+  let placeholder = null;
+  let moved = false;
+
+  tileEl.addEventListener('pointerdown', (e) => {
+    if (boardLocked) return;
+    if (tileEl.classList.contains('locked')) return;
+    if (!startTime) startTimer();
+    moved = false;
+
+    const rect = tileEl.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+
+    placeholder = document.createElement('div');
+    placeholder.style.width = rect.width + 'px';
+    placeholder.style.height = rect.height + 'px';
+    placeholder.style.flexShrink = '0';
+    tileEl.parentNode.insertBefore(placeholder, tileEl);
+
+    tileEl.style.width = rect.width + 'px';
+    tileEl.style.left = rect.left + 'px';
+    tileEl.style.top = rect.top + 'px';
+    tileEl.classList.add('dragging');
+    tileEl.setPointerCapture(e.pointerId);
+
+    function onMove(ev) {
+      moved = true;
+      tileEl.style.left = (ev.clientX - offsetX) + 'px';
+      tileEl.style.top = (ev.clientY - offsetY) + 'px';
+
+      document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover-target'));
+      const target = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = target?.closest('.slot');
+      if (slot && !slot.classList.contains('filled')) slot.classList.add('hover-target');
+    }
+
+    function onUp(ev) {
+      tileEl.classList.remove('dragging');
+      tileEl.style.position = '';
+      tileEl.style.left = ''; tileEl.style.top = ''; tileEl.style.width = '';
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+
+      const target = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = target?.closest('.slot');
+      document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover-target'));
+
+      if (slot && !slot.classList.contains('filled')) {
+        placeholder.remove();
+        placeTileInSlot(tileEl, slot);
+      } else {
+        placeholder.replaceWith(tileEl);
+      }
+      placeholder = null;
+    }
+
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
+}
+
+// Placement is unconditional: no correctness feedback at drop time.
+// Correctness is only ever revealed once the entire board is full.
+function placeTileInSlot(tileEl, slot) {
+  slot.classList.add('filled');
+  slot.appendChild(tileEl);
+  filledSlotsCount++;
+  updateProgress();
+
+  if (filledSlotsCount === totalSlots) {
+    evaluateBoard();
+  }
+}
+
+function releaseTileFromSlot(slot) {
+  if (boardLocked) return;
+  const tileEl = slot.querySelector('.tile');
+  if (!tileEl || tileEl.classList.contains('locked')) return;
+
+  poolEl.appendChild(tileEl);
+  slot.classList.remove('filled');
+  filledSlotsCount--;
+  updateProgress();
+}
+
+function updateProgress() {
+  const pct = (filledSlotsCount / totalSlots) * 100;
+  progressFill.style.width = pct + '%';
+  statusLine.textContent = filledSlotsCount === totalSlots
+    ? 'Checking...'
+    : `${filledSlotsCount} of ${totalSlots} tiles placed`;
+}
+
+function evaluateBoard() {
+  boardLocked = true;
+  const slots = Array.from(document.querySelectorAll('.slot'));
+  let allCorrect = true;
+  const wrongSlots = [];
+
+  slots.forEach(slot => {
+    const tileEl = slot.querySelector('.tile');
+    const correct =
+      parseInt(tileEl.dataset.clueIdx, 10) === parseInt(slot.dataset.clueIndex, 10) &&
+      parseInt(tileEl.dataset.chunkIdx, 10) === parseInt(slot.dataset.slotIndex, 10);
+    if (!correct) {
+      allCorrect = false;
+      wrongSlots.push(slot);
+    }
+  });
+
+  setTimeout(() => {
+    if (allCorrect) {
+      slots.forEach(slot => slot.querySelector('.tile').classList.add('locked'));
+      document.querySelectorAll('.clue-row').forEach(r => r.classList.add('solved'));
+      finishPuzzle();
+    } else {
+      // reveal which were wrong only now that the whole board was attempted,
+      // lock the correct ones, and return the wrong tiles to the pool to retry
+      slots.forEach(slot => {
+        const tileEl = slot.querySelector('.tile');
+        if (wrongSlots.includes(slot)) {
+          tileEl.classList.add('wrong-shake');
+        } else {
+          tileEl.classList.add('locked');
+        }
+      });
+
+      setTimeout(() => {
+        wrongSlots.forEach(slot => {
+          const tileEl = slot.querySelector('.tile');
+          tileEl.classList.remove('wrong-shake');
+          poolEl.appendChild(tileEl);
+          slot.classList.remove('filled');
+        });
+        filledSlotsCount = totalSlots - wrongSlots.length;
+        boardLocked = false;
+        statusLine.textContent = `${wrongSlots.length} tile${wrongSlots.length === 1 ? '' : 's'} were wrong — try again`;
+      }, 500);
+    }
+  }, 350);
+}
+
+function startTimer() {
+  startTime = Date.now();
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const ss = String(elapsed % 60).padStart(2, '0');
+    timerEl.textContent = `${mm}:${ss}`;
+  }, 250);
+}
+
+function finishPuzzle() {
+  clearInterval(timerInterval);
+  streak += 1;
+  document.getElementById('streak').textContent = streak;
+  document.getElementById('finalStreak').textContent = streak;
+  document.getElementById('finalTime').textContent = timerEl.textContent;
+  document.getElementById('solvedOverlay').classList.add('show');
+}
+
+async function fetchDefinition(word, targetEl) {
+  targetEl.classList.add('show');
+  targetEl.textContent = 'Looking up "' + word + '"...';
+  try {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    if (!res.ok) throw new Error('not found');
+    const data = await res.json();
+    const def = data[0]?.meanings?.[0]?.definitions?.[0]?.definition;
+    targetEl.textContent = def ? `→ ${def}` : 'No definition found.';
+  } catch (err) {
+    targetEl.textContent = 'Could not fetch definition (word not in dictionary or network blocked).';
+  }
+}
+
+function resetGame() {
+  startTime = null;
+  clearInterval(timerInterval);
+  timerEl.textContent = '00:00';
+  buildBoard();
+}
+
+async function loadPuzzle() {
+  cluesEl.innerHTML = '<p class="empty-state" style="font-family:\'JetBrains Mono\',monospace; color:var(--paper-dim); font-size:13px;">Loading puzzle...</p>';
+  try {
+    const res = await fetch(PUZZLE_SOURCE);
+    if (!res.ok) throw new Error('File not found: ' + PUZZLE_SOURCE);
+    const data = await res.json();
+
+    PUZZLE = data.puzzle || data; // supports {theme, puzzle:[...]} or a bare array
+
+    if (data.theme) {
+      document.getElementById('themeLabel').textContent = `Theme: ${data.theme}`;
+    }
+
+    buildBoard();
+  } catch (err) {
+    cluesEl.innerHTML = `
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--redact); line-height:1.6; padding:16px 0;">
+        Couldn't load ${PUZZLE_SOURCE}.<br><br>
+        Most likely cause: this page was opened as a local file (file://) and the browser blocked the fetch by CORS policy.<br><br>
+        Fix: serve this folder over a local server instead of double-clicking the file — e.g. run <code>python3 -m http.server</code> in the folder containing both this HTML file and ${PUZZLE_SOURCE.replace('./','')}, then open http://localhost:8000/wordhunter-demo.html in your browser.<br><br>
+        Also double-check ${PUZZLE_SOURCE.replace('./','')} sits in the same folder as this file, with matching case-sensitive filename.
+      </div>`;
+  }
+}
+
+loadPuzzle();
+</script>
+</body>
+</html>
