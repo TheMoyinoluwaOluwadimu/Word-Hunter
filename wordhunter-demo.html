@@ -109,12 +109,6 @@
   }
   .clue-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .clue-text { font-size: 15px; color: var(--paper); flex: 1; }
-  .clue-text .info-btn {
-    background: none; border: 1px solid #3a3c46; color: var(--paper-dim);
-    font-family: 'JetBrains Mono', monospace; font-size: 10px;
-    border-radius: 50%; width: 18px; height: 18px; line-height: 1;
-    cursor: pointer; margin-left: 8px; vertical-align: middle;
-  }
 
   /* drop slots */
   .slots { display: flex; gap: 6px; justify-content: flex-end; }
@@ -177,15 +171,6 @@
     font-weight: 700; font-size: 14px; color: #f4f2ea;
   }
 
-  .definition-strip {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--teal);
-    margin-top: 4px;
-    display: none;
-  }
-  .definition-strip.show { display: block; }
-
   .footer-bar {
     position: sticky; bottom: 0;
     padding: 16px 22px 22px;
@@ -233,14 +218,14 @@
 <body>
 <div class="stage">
   <div class="header">
-    <p class="eyebrow">Case File · Puzzle of the Day</p>
+    <p class="eyebrow">Puzzle of the Day</p>
     <h1 class="title">Wordhunter</h1>
     <div class="stamp">LIVE DEMO</div>
   </div>
 
   <div class="meta-row">
     <div class="meta-item"><span class="dot"></span><span id="timer">00:00</span></div>
-    <div class="streak">🔥 <span id="streak">10</span></div>
+    <div class="streak">🔥 <span id="streak">0</span></div>
   </div>
 
   <div class="theme-banner">
@@ -266,11 +251,11 @@
     <button onclick="resetGame()">Play again</button>
   </div>
 
-  <p class="api-note">Tap ⓘ for a live dictionary definition · fill every slot — correctness is only checked once the whole board is full · tap a filled slot to take a tile back</p>
+  <p class="api-note">Fill every slot — correctness is only checked once the whole board is full · tap a filled tile to send it back to the pool</p>
 </div>
 
 <script>
-const PUZZLE_SOURCE = './Architecture.json';
+const PUZZLE_SOURCE = './OceanLife.json';
 
 let PUZZLE = [];
 
@@ -315,10 +300,9 @@ function buildBoard() {
 
     row.innerHTML = `
       <div class="clue-top">
-        <div class="clue-text">${item.clue}<button class="info-btn" title="Fetch definition">ⓘ</button></div>
+        <div class="clue-text">${item.clue}</div>
         <div class="slots"></div>
       </div>
-      <div class="definition-strip"></div>
     `;
 
     const slotsWrap = row.querySelector('.slots');
@@ -327,13 +311,7 @@ function buildBoard() {
       s.className = 'slot';
       s.dataset.slotIndex = slotIdx;
       s.dataset.clueIndex = idx;
-      s.addEventListener('click', () => releaseTileFromSlot(s));
       slotsWrap.appendChild(s);
-    });
-
-    row.querySelector('.info-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      fetchDefinition(item.answer, row.querySelector('.definition-strip'));
     });
 
     cluesEl.appendChild(row);
@@ -363,23 +341,36 @@ function buildBoard() {
 function attachDragHandlers(tileEl) {
   let offsetX = 0, offsetY = 0;
   let placeholder = null;
-  let moved = false;
 
   tileEl.addEventListener('pointerdown', (e) => {
     if (boardLocked) return;
     if (tileEl.classList.contains('locked')) return;
     if (!startTime) startTimer();
-    moved = false;
+
+    const startX = e.clientX, startY = e.clientY;
+    let lastX = startX, lastY = startY;
+
+    const originalParent = tileEl.parentElement;
+    const isFromSlot = originalParent.classList.contains('slot');
 
     const rect = tileEl.getBoundingClientRect();
     offsetX = e.clientX - rect.left;
     offsetY = e.clientY - rect.top;
 
-    placeholder = document.createElement('div');
-    placeholder.style.width = rect.width + 'px';
-    placeholder.style.height = rect.height + 'px';
-    placeholder.style.flexShrink = '0';
-    tileEl.parentNode.insertBefore(placeholder, tileEl);
+    if (isFromSlot) {
+      // free up the slot the moment the tile is lifted, so counts and
+      // "board is full" checks stay accurate mid-drag
+      originalParent.classList.remove('filled');
+      filledSlotsCount--;
+      updateProgress();
+    } else {
+      // keep the pool's layout stable while dragging by holding its spot
+      placeholder = document.createElement('div');
+      placeholder.style.width = rect.width + 'px';
+      placeholder.style.height = rect.height + 'px';
+      placeholder.style.flexShrink = '0';
+      originalParent.insertBefore(placeholder, tileEl);
+    }
 
     tileEl.style.width = rect.width + 'px';
     tileEl.style.left = rect.left + 'px';
@@ -388,34 +379,56 @@ function attachDragHandlers(tileEl) {
     tileEl.setPointerCapture(e.pointerId);
 
     function onMove(ev) {
-      moved = true;
+      lastX = ev.clientX; lastY = ev.clientY;
       tileEl.style.left = (ev.clientX - offsetX) + 'px';
       tileEl.style.top = (ev.clientY - offsetY) + 'px';
 
       document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover-target'));
       const target = document.elementFromPoint(ev.clientX, ev.clientY);
       const slot = target?.closest('.slot');
-      if (slot && !slot.classList.contains('filled')) slot.classList.add('hover-target');
+      if (slot) slot.classList.add('hover-target');
     }
 
     function onUp(ev) {
-      tileEl.classList.remove('dragging');
-      tileEl.style.position = '';
-      tileEl.style.left = ''; tileEl.style.top = ''; tileEl.style.width = '';
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
 
-      const target = document.elementFromPoint(ev.clientX, ev.clientY);
-      const slot = target?.closest('.slot');
+      tileEl.classList.remove('dragging');
+      tileEl.style.position = '';
+      tileEl.style.left = ''; tileEl.style.top = ''; tileEl.style.width = '';
       document.querySelectorAll('.slot').forEach(s => s.classList.remove('hover-target'));
+      if (placeholder) { placeholder.remove(); placeholder = null; }
 
-      if (slot && !slot.classList.contains('filled')) {
-        placeholder.remove();
-        placeTileInSlot(tileEl, slot);
+      const dist = Math.hypot(lastX - startX, lastY - startY);
+      const isTap = dist < 6; // a plain tap always sends the tile back to the pool
+
+      const target = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slot = !isTap ? target?.closest('.slot') : null;
+
+      if (slot) {
+        if (slot.classList.contains('filled')) {
+          // dropped on an occupied slot: swap the existing tile back to
+          // the pool, then place the dragged tile in its spot
+          const existing = slot.querySelector('.tile');
+          if (existing && !existing.classList.contains('locked')) {
+            poolEl.appendChild(existing);
+            slot.classList.remove('filled');
+            filledSlotsCount--;
+            updateProgress();
+            placeTileInSlot(tileEl, slot);
+          } else {
+            poolEl.appendChild(tileEl);
+          }
+        } else {
+          placeTileInSlot(tileEl, slot);
+        }
       } else {
-        placeholder.replaceWith(tileEl);
+        poolEl.appendChild(tileEl);
       }
-      placeholder = null;
+
+      if (filledSlotsCount === totalSlots) {
+        evaluateBoard();
+      }
     }
 
     document.addEventListener('pointermove', onMove);
@@ -429,21 +442,6 @@ function placeTileInSlot(tileEl, slot) {
   slot.classList.add('filled');
   slot.appendChild(tileEl);
   filledSlotsCount++;
-  updateProgress();
-
-  if (filledSlotsCount === totalSlots) {
-    evaluateBoard();
-  }
-}
-
-function releaseTileFromSlot(slot) {
-  if (boardLocked) return;
-  const tileEl = slot.querySelector('.tile');
-  if (!tileEl || tileEl.classList.contains('locked')) return;
-
-  poolEl.appendChild(tileEl);
-  slot.classList.remove('filled');
-  filledSlotsCount--;
   updateProgress();
 }
 
@@ -521,20 +519,6 @@ function finishPuzzle() {
   document.getElementById('finalStreak').textContent = streak;
   document.getElementById('finalTime').textContent = timerEl.textContent;
   document.getElementById('solvedOverlay').classList.add('show');
-}
-
-async function fetchDefinition(word, targetEl) {
-  targetEl.classList.add('show');
-  targetEl.textContent = 'Looking up "' + word + '"...';
-  try {
-    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-    if (!res.ok) throw new Error('not found');
-    const data = await res.json();
-    const def = data[0]?.meanings?.[0]?.definitions?.[0]?.definition;
-    targetEl.textContent = def ? `→ ${def}` : 'No definition found.';
-  } catch (err) {
-    targetEl.textContent = 'Could not fetch definition (word not in dictionary or network blocked).';
-  }
 }
 
 function resetGame() {
