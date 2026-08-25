@@ -64,7 +64,7 @@
   .word-label { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; color: var(--amber); text-transform: uppercase; }
   label.check { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--paper-dim); }
 
-  textarea.clue-edit {
+  textarea.word-edit {
     width: 100%; background: #14151A; border: 1px solid var(--border); border-radius: 5px;
     color: var(--paper); padding: 8px 10px; font-family: 'Inter', sans-serif; font-size: 13px;
     resize: vertical; min-height: 40px; margin-bottom: 10px;
@@ -112,10 +112,10 @@
 
   <div class="panel">
     <div class="input-row">
-      <input type="text" id="themeInput" placeholder="Theme, e.g. 'Weather Phenomena', 'Space', 'Cooking'" value="Ocean Life">
+      <input type="text" id="themeInput" placeholder="Theme, e.g. 'Weather Phenomena', 'Space', 'Cooking'">
       <button id="generateBtn">Discover words</button>
     </div>
-    <p class="status" id="status">Enter a theme and discover candidate words. Each is checked against a live dictionary before it's usable.</p>
+    <p class="status" id="status">Enter a theme and discover candidate words. Each is checked against the dictionary first, with a backup definition source if it's not found there.</p>
   </div>
 
   <div class="panel" id="candidatesPanel" style="display:none;">
@@ -124,6 +124,18 @@
       <span id="selectedCount" class="count-pill">0 selected</span>
     </div>
     <div id="candidateList"></div>
+
+    <div class="footer-actions" id="loadMoreRow" style="display:none;">
+      <button id="loadMoreBtn" class="secondary">Load more words</button>
+    </div>
+
+    <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);">
+      <strong style="font-family:'JetBrains Mono',monospace; font-size:12px; color: var(--paper-dim); display:block; margin-bottom:8px;">Know a word that should be in here? Add it directly</strong>
+      <div class="input-row">
+        <input type="text" id="manualWordInput" placeholder="e.g. 'plankton'">
+        <button id="manualAddBtn" class="secondary">Add word</button>
+      </div>
+    </div>
   </div>
 
   <div class="panel export-box" id="exportBox">
@@ -147,6 +159,10 @@ const themeInput = document.getElementById('themeInput');
 const generateBtn = document.getElementById('generateBtn');
 const statusEl = document.getElementById('status');
 const candidatesPanel = document.getElementById('candidatesPanel');
+const loadMoreRow = document.getElementById('loadMoreRow');
+const loadMoreBtn = document.getElementById('loadMoreBtn');
+const manualWordInput = document.getElementById('manualWordInput');
+const manualAddBtn = document.getElementById('manualAddBtn');
 const candidateList = document.getElementById('candidateList');
 const selectedCountEl = document.getElementById('selectedCount');
 const buildRow = document.getElementById('buildRow');
@@ -206,12 +222,67 @@ function chunksFromBoundaries(word, boundaries) {
 }
 
 function truncateDefinition(def) {
-  // keep clues short and puzzle-like, not full dictionary sentences
+  // keep words short and puzzle-like, not full dictionary sentences
   let d = def.split(';')[0].split(',')[0];
   const words = d.split(' ');
   if (words.length > 7) d = words.slice(0, 7).join(' ');
   return d.replace(/\.$/, '');
 }
+
+// Datamuse's md=d metadata returns defs as an array of "pos\tdefinition"
+// strings (e.g. "n\tan intense storm..."). Take the first usable one.
+function parseFirstDefinition(defsArray) {
+  if (!defsArray || defsArray.length === 0) return null;
+  const first = defsArray[0];
+  const tabIdx = first.indexOf('\t');
+  const text = tabIdx >= 0 ? first.slice(tabIdx + 1) : first;
+  return text && text.trim() ? text.trim() : null;
+}
+
+// Dictionary API is tried first (better-phrased, more on-theme definitions);
+// Datamuse's md=d definition is the fallback when a word isn't in the
+// dictionary or the API is briefly unreachable, so a candidate is never
+// dropped just because one source came up empty.
+async function buildCandidate(entry) {
+  const word = entry.word.toLowerCase();
+  const datamuseDef = parseFirstDefinition(entry.defs);
+  let definition = null;
+  let defSource = null;
+
+  try {
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    if (res.ok) {
+      const data = await res.json();
+      const dictDef = data[0]?.meanings?.[0]?.definitions?.[0]?.definition;
+      if (dictDef) {
+        definition = dictDef;
+        defSource = 'dictionary';
+      }
+    }
+  } catch (e) {
+    // network hiccup — fall through to the Datamuse definition below
+  }
+
+  if (!definition && datamuseDef) {
+    definition = datamuseDef;
+    defSource = 'datamuse';
+  }
+
+  if (!definition) return null; // neither source had anything usable
+
+  const chunks = guessChunks(word);
+  return {
+    word,
+    definition: truncateDefinition(definition),
+    defSource,
+    chunks,
+    boundaries: boundariesFromChunks(word, chunks),
+    selected: false,
+  };
+}
+
+let seenWords = new Set(); // tracks every word already fetched (theme-related or manual) to avoid duplicates
+let allFetchedForTheme = []; // full Datamuse pool for the current theme (with defs already attached), so "load more" doesn't re-query
 
 async function discoverWords() {
   const theme = themeInput.value.trim();
@@ -219,64 +290,130 @@ async function discoverWords() {
 
   generateBtn.disabled = true;
   candidates = [];
+  seenWords = new Set();
+  allFetchedForTheme = [];
   candidateList.innerHTML = '';
   candidatesPanel.style.display = 'none';
   buildRow.style.display = 'none';
+  loadMoreRow.style.display = 'none';
   exportBox.classList.remove('show');
   statusEl.textContent = `Searching for words related to "${theme}"...`;
 
   let related = [];
   try {
-    const res = await fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(theme)}&max=40`);
-    related = await res.json();
+    // pull two relation types so narrow themes still return a decent pool:
+    // 'ml' = means-like (conceptually related), 'rel_trg' = commonly triggered by the theme word
+    // md=d asks Datamuse to include a definition directly in the same response —
+    // used as a fallback if the Dictionary API doesn't have the word
+    const [mlRes, trgRes] = await Promise.all([
+      fetch(`https://api.datamuse.com/words?ml=${encodeURIComponent(theme)}&md=d&max=100`),
+      fetch(`https://api.datamuse.com/words?rel_trg=${encodeURIComponent(theme)}&md=d&max=100`),
+    ]);
+    const [mlData, trgData] = await Promise.all([mlRes.json(), trgRes.json()]);
+    related = [...mlData, ...trgData];
   } catch (e) {
     statusEl.textContent = 'Could not reach Datamuse API — check network access.';
     generateBtn.disabled = false;
     return;
   }
 
-  const pool = related
-    .map(r => r.word.toLowerCase())
-    .filter(w => /^[a-z]+$/.test(w) && w.length >= 4 && w.length <= 12)
-    .slice(0, 16);
+  const seenInPool = new Set();
+  allFetchedForTheme = related.filter(entry => {
+    const w = entry.word.toLowerCase();
+    if (!/^[a-z]+$/.test(w) || w.length < 4 || w.length > 12) return false;
+    if (seenInPool.has(w)) return false;
+    seenInPool.add(w);
+    return true;
+  });
 
-  if (pool.length === 0) {
-    statusEl.textContent = 'No usable single-word candidates found — try a broader theme.';
+  if (allFetchedForTheme.length === 0) {
+    statusEl.textContent = 'No usable single-word candidates found — try a broader theme, or add words manually below.';
     generateBtn.disabled = false;
+    candidatesPanel.style.display = 'block';
     return;
   }
 
   candidatesPanel.style.display = 'block';
+  await processBatch(allFetchedForTheme.splice(0, 20));
+
+  generateBtn.disabled = false;
+  updateLoadMoreVisibility();
+}
+
+async function processBatch(entries) {
+  let added = 0;
   let checked = 0;
-
-  for (const word of pool) {
+  for (const entry of entries) {
+    const word = entry.word.toLowerCase();
+    if (seenWords.has(word)) continue;
+    seenWords.add(word);
     checked++;
-    statusEl.textContent = `Validating "${word}" (${checked}/${pool.length})...`;
-    try {
-      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const rawDef = data[0]?.meanings?.[0]?.definitions?.[0]?.definition;
-      if (!rawDef) continue;
+    statusEl.textContent = `Checking "${word}" (${checked}/${entries.length})...`;
 
-      const chunks = guessChunks(word);
-      candidates.push({
-        word,
-        definition: truncateDefinition(rawDef),
-        chunks,
-        boundaries: boundariesFromChunks(word, chunks),
-        selected: candidates.length < 5, // pre-select first few for convenience
-      });
-    } catch (e) {
-      // skip words the dictionary can't validate
-    }
+    const candidate = await buildCandidate(entry);
+    if (!candidate) continue; // neither source had a definition — skip
+
+    candidate.selected = candidates.filter(c => c.selected).length < 5;
+    candidates.push(candidate);
+    added++;
     renderCandidates();
   }
 
-  statusEl.textContent = `Done — ${candidates.length} of ${pool.length} candidates validated by the dictionary. Review clues and chunk splits, select 4–6, then build.`;
-  generateBtn.disabled = false;
+  statusEl.textContent = `${candidates.length} candidates ready (${added} added from this batch). Review words and chunk splits, select 4–8, then build.`;
   buildRow.style.display = 'flex';
   updateBuildState();
+}
+
+function updateLoadMoreVisibility() {
+  loadMoreRow.style.display = allFetchedForTheme.length > 0 ? 'flex' : 'none';
+}
+
+async function loadMoreWords() {
+  if (allFetchedForTheme.length === 0) return;
+  loadMoreBtn.disabled = true;
+  const nextBatch = allFetchedForTheme.splice(0, 20);
+  await processBatch(nextBatch);
+  loadMoreBtn.disabled = false;
+  updateLoadMoreVisibility();
+}
+
+async function addManualWord() {
+  const word = manualWordInput.value.trim().toLowerCase();
+  if (!word) return;
+  if (!/^[a-z]+$/.test(word)) {
+    statusEl.textContent = `"${word}" — only single words (letters only) can be added.`;
+    return;
+  }
+  if (seenWords.has(word)) {
+    statusEl.textContent = `"${word}" is already in your candidate list.`;
+    manualWordInput.value = '';
+    return;
+  }
+
+  manualAddBtn.disabled = true;
+  statusEl.textContent = `Checking "${word}"...`;
+  seenWords.add(word);
+
+  try {
+    // confirm the word exists and grab a Datamuse fallback definition,
+    // then let buildCandidate prefer the Dictionary API's definition if it has one
+    const res = await fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=d&max=1`);
+    const data = await res.json();
+    const match = data.find(entry => entry.word.toLowerCase() === word) || { word, defs: [] };
+
+    const candidate = await buildCandidate(match);
+    if (!candidate) throw new Error('no definition');
+    candidate.selected = true;
+
+    candidates.push(candidate);
+    candidatesPanel.style.display = 'block';
+    renderCandidates();
+    statusEl.textContent = `Added "${word}".`;
+    manualWordInput.value = '';
+  } catch (e) {
+    statusEl.textContent = `"${word}" isn't in the dictionary — try another spelling.`;
+  }
+  manualAddBtn.disabled = false;
 }
 
 function renderCandidates() {
@@ -287,17 +424,18 @@ function renderCandidates() {
 
     const head = document.createElement('div');
     head.className = 'candidate-head';
+    const sourceTag = c.defSource ? `<span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--paper-dim); margin-left:8px;">via ${c.defSource}</span>` : '';
     head.innerHTML = `
-      <span class="word-label">${c.word}</span>
+      <span class="word-label">${c.word}</span>${sourceTag}
       <label class="check"><input type="checkbox" ${c.selected ? 'checked' : ''} data-idx="${idx}" class="sel-check"> use this</label>
     `;
     card.appendChild(head);
 
-    const clueEdit = document.createElement('textarea');
-    clueEdit.className = 'clue-edit';
-    clueEdit.value = c.definition;
-    clueEdit.addEventListener('input', () => { c.definition = clueEdit.value; });
-    card.appendChild(clueEdit);
+    const wordEdit = document.createElement('textarea');
+    wordEdit.className = 'word-edit';
+    wordEdit.value = c.definition;
+    wordEdit.addEventListener('input', () => { c.definition = wordEdit.value; });
+    card.appendChild(wordEdit);
 
     const editorWrap = document.createElement('div');
     editorWrap.className = 'chunk-editor';
@@ -357,7 +495,7 @@ function buildPuzzle() {
   const selected = candidates.filter(c => c.selected);
 
   const puzzle = selected.map(c => ({
-    clue: c.definition,
+    word: c.definition,
     answer: c.word,
     chunks: c.chunks,
   }));
@@ -365,7 +503,7 @@ function buildPuzzle() {
   const output = {
     theme,
     generated_at: new Date().toISOString(),
-    source: "datamuse + dictionaryapi.dev (auto-suggested chunks, human-reviewed)",
+    source: "dictionaryapi.dev (primary) + datamuse md=d (fallback), auto-suggested chunks, human-reviewed",
     puzzle,
   };
 
@@ -394,6 +532,9 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 });
 
 generateBtn.addEventListener('click', discoverWords);
+loadMoreBtn.addEventListener('click', loadMoreWords);
+manualAddBtn.addEventListener('click', addManualWord);
+manualWordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addManualWord(); });
 buildBtn.addEventListener('click', buildPuzzle);
 themeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') discoverWords(); });
 </script>

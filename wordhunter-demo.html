@@ -93,22 +93,22 @@
     box-shadow: 3px 3px 0 rgba(0,0,0,0.35);
   }
 
-  .clues {
+  .words {
     flex: 1;
-    padding: 10px 22px 100px;
+    padding: 10px 22px 10px;
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
-  .clue-row {
+  .word-row {
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding: 12px 0;
     border-bottom: 1px solid #24262f;
   }
-  .clue-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .clue-text { font-size: 15px; color: var(--paper); flex: 1; }
+  .word-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .word-text { font-size: 15px; color: var(--paper); flex: 1; }
 
   /* drop slots */
   .slots { display: flex; gap: 6px; justify-content: flex-end; }
@@ -125,7 +125,7 @@
   .slot.hover-target { border-color: var(--amber); background: rgba(232,163,61,0.28); }
   .slot.filled { border-color: var(--teal); background: var(--teal); }
 
-  .clue-row.solved .clue-text { color: var(--paper-dim); text-decoration: line-through; text-decoration-color: #3a3c46; }
+  .word-row.solved .word-text { color: var(--paper-dim); text-decoration: line-through; text-decoration-color: #3a3c46; }
 
   /* shared tile pool */
   .pool-section {
@@ -230,10 +230,10 @@
 
   <div class="theme-banner">
     <span id="themeLabel">Theme: Weather Phenomena</span>
-    <span style="font-size:13px;" id="clueCount">5 clues</span>
+    <span style="font-size:13px;" id="wordCount"></span>
   </div>
 
-  <div class="clues" id="clues"></div>
+  <div class="words" id="words"></div>
 
   <div class="pool-section">
     <div class="pool" id="pool"></div>
@@ -241,7 +241,7 @@
 
   <div class="footer-bar">
     <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-    <div class="status-line" id="statusLine">Tap the tiles in order to solve each clue</div>
+    <div class="status-line" id="statusLine">Tap the tiles in order to solve each word</div>
   </div>
 
   <div class="solved-overlay" id="solvedOverlay">
@@ -266,7 +266,7 @@ let startTime = null;
 let timerInterval = null;
 let streak = 12;
 
-const cluesEl = document.getElementById('clues');
+const wordsEl = document.getElementById('words');
 const poolEl = document.getElementById('pool');
 const timerEl = document.getElementById('timer');
 const progressFill = document.getElementById('progressFill');
@@ -282,25 +282,25 @@ function shuffle(arr) {
 }
 
 function buildBoard() {
-  cluesEl.innerHTML = '';
+  wordsEl.innerHTML = '';
   poolEl.innerHTML = '';
   filledSlotsCount = 0;
   boardLocked = false;
   progressFill.style.width = '0%';
   document.getElementById('solvedOverlay').classList.remove('show');
   statusLine.textContent = 'Fill every slot, then it checks itself';
-  document.getElementById('clueCount').textContent = `${PUZZLE.length} clues`;
+  document.getElementById('wordCount').textContent = `${PUZZLE.length} words`;
 
   totalSlots = PUZZLE.reduce((sum, item) => sum + item.chunks.length, 0);
 
   PUZZLE.forEach((item, idx) => {
     const row = document.createElement('div');
-    row.className = 'clue-row';
+    row.className = 'word-row';
     row.dataset.index = idx;
 
     row.innerHTML = `
-      <div class="clue-top">
-        <div class="clue-text">${item.clue}</div>
+      <div class="word-top">
+        <div class="word-text">${item.word}</div>
         <div class="slots"></div>
       </div>
     `;
@@ -310,28 +310,28 @@ function buildBoard() {
       const s = document.createElement('div');
       s.className = 'slot';
       s.dataset.slotIndex = slotIdx;
-      s.dataset.clueIndex = idx;
+      s.dataset.wordIndex = idx;
       slotsWrap.appendChild(s);
     });
 
-    cluesEl.appendChild(row);
+    wordsEl.appendChild(row);
   });
 
-  // one shared pool holding every chunk from every clue, mixed together
+  // one shared pool holding every chunk from every word, mixed together
   const allTiles = [];
-  PUZZLE.forEach((item, clueIdx) => {
+  PUZZLE.forEach((item, wordIdx) => {
     item.chunks.forEach((chunk, chunkIdx) => {
-      allTiles.push({ chunk, clueIdx, chunkIdx });
+      allTiles.push({ chunk, wordIdx, chunkIdx });
     });
   });
   const shuffledTiles = shuffle(allTiles);
 
-  shuffledTiles.forEach(({ chunk, clueIdx, chunkIdx }) => {
+  shuffledTiles.forEach(({ chunk, wordIdx, chunkIdx }) => {
     const t = document.createElement('div');
     t.className = 'tile';
     t.textContent = chunk;
     t.dataset.chunk = chunk;
-    t.dataset.clueIdx = clueIdx;
+    t.dataset.wordIdx = wordIdx;
     t.dataset.chunkIdx = chunkIdx;
     attachDragHandlers(t);
     poolEl.appendChild(t);
@@ -462,7 +462,7 @@ function evaluateBoard() {
   slots.forEach(slot => {
     const tileEl = slot.querySelector('.tile');
     const correct =
-      parseInt(tileEl.dataset.clueIdx, 10) === parseInt(slot.dataset.clueIndex, 10) &&
+      parseInt(tileEl.dataset.wordIdx, 10) === parseInt(slot.dataset.wordIndex, 10) &&
       parseInt(tileEl.dataset.chunkIdx, 10) === parseInt(slot.dataset.slotIndex, 10);
     if (!correct) {
       allCorrect = false;
@@ -473,7 +473,7 @@ function evaluateBoard() {
   setTimeout(() => {
     if (allCorrect) {
       slots.forEach(slot => slot.querySelector('.tile').classList.add('locked'));
-      document.querySelectorAll('.clue-row').forEach(r => r.classList.add('solved'));
+      document.querySelectorAll('.word-row').forEach(r => r.classList.add('solved'));
       finishPuzzle();
     } else {
       // reveal which were wrong only now that the whole board was attempted,
@@ -529,7 +529,7 @@ function resetGame() {
 }
 
 async function loadPuzzle() {
-  cluesEl.innerHTML = '<p class="empty-state" style="font-family:\'JetBrains Mono\',monospace; color:var(--paper-dim); font-size:13px;">Loading puzzle...</p>';
+  wordsEl.innerHTML = '<p class="empty-state" style="font-family:\'JetBrains Mono\',monospace; color:var(--paper-dim); font-size:13px;">Loading puzzle...</p>';
   try {
     const res = await fetch(PUZZLE_SOURCE);
     if (!res.ok) throw new Error('File not found: ' + PUZZLE_SOURCE);
@@ -543,7 +543,7 @@ async function loadPuzzle() {
 
     buildBoard();
   } catch (err) {
-    cluesEl.innerHTML = `
+    wordsEl.innerHTML = `
       <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--redact); line-height:1.6; padding:16px 0;">
         Couldn't load ${PUZZLE_SOURCE}.<br><br>
         Most likely cause: this page was opened as a local file (file://) and the browser blocked the fetch by CORS policy.<br><br>

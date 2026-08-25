@@ -4,7 +4,7 @@
     "source": "datamuse + dictionaryapi.dev (auto-suggested chunks, human-reviewed)",
     "puzzle": [
       {
-        "clue": "A sailor or mariner",
+        "word": "A sailor or mariner",
         "answer": "seafarer",
         "chunks": [
           "sea",
@@ -13,7 +13,7 @@
         ]
       },
       {
-        "clue": "A hard substance made of the limestone",
+        "word": "A hard substance made of the limestone",
         "answer": "coral",
         "chunks": [
           "co",
@@ -21,14 +21,14 @@
         ]
       },
       {
-        "clue": "To consume (a liquid) through the mouth",
+        "word": "To consume (a liquid) through the mouth",
         "answer": "drink",
         "chunks": [
           "drink"
         ]
       },
       {
-        "clue": "A current of air or water running",
+        "word": "A current of air or water running",
         "answer": "eddy",
         "chunks": [
           "e",
@@ -36,7 +36,7 @@
         ]
       },
       {
-        "clue": "Any of many colonial coelenterates that exist",
+        "word": "Any of many colonial coelenterates that exist",
         "answer": "hydroid",
         "chunks": [
           "hy",
