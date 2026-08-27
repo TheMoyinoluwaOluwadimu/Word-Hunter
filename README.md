@@ -19,6 +19,10 @@ A themed word puzzle game. Each puzzle gives you a set of clues — solve them b
 | `wordhunter-demo.html` | The game itself. Open it in a browser to play. |
 | `puzzle-generator.html` | A tool for creating new puzzles — pulls words for a theme, checks they're real, writes clues, and splits them into pieces. |
 | `OceanLife.json` | A sample puzzle you can load into the game. |
+| `Architecture.json` | A sample puzzle you can load into the game. |
+| `Coffee.json` | A sample puzzle you can load into the game. |
+| `Music.json` | A sample puzzle you can load into the game. |
+| `OSpace.json` | A sample puzzle you can load into the game. |
 | `wordgame-architecture.md` | The full plan for turning this into a real app (accounts, daily puzzle, leaderboard, versus mode). |
 
 ## Running the game
