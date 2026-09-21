@@ -249,7 +249,7 @@
     <!-- primary: today's daily puzzle -->
     <a href="wordhunter-demo.html" class="folder primary" tabindex="0">
       <p class="folder-label">Today's Case</p>
-      <h2 class="folder-title">Weather Phenomena</h2>
+      <h2 class="folder-title" id="dailyThemeTitle">Weather Phenomena</h2>
       <p class="folder-sub">One case a day. Solve it before the clock resets.</p>
       <div class="wordhunter-badge">
         <svg class="icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -326,5 +326,22 @@
   </div>
 
 </div>
+<script>
+  // Keep "Today's Case" in sync with whatever puzzle file the game itself loads,
+  // so this label can never silently drift out of date.
+  const DAILY_PUZZLE_SOURCE = './Music.json';
+
+  fetch(DAILY_PUZZLE_SOURCE)
+    .then(res => res.ok ? res.json() : Promise.reject())
+    .then(data => {
+      if (data.theme) {
+        document.getElementById('dailyThemeTitle').textContent = data.theme;
+      }
+    })
+    .catch(() => {
+      // leave the static fallback title in place if the file can't be reached
+      // (e.g. opened as file:// without a local server)
+    });
+</script>
 </body>
 </html>
