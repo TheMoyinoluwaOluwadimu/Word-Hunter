@@ -41,8 +41,21 @@
   .header {
     padding: 28px 22px 18px;
     border-bottom: 1px dashed #3a3c46;
-    position: relative;
   }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .back-btn {
+    background: var(--ink-2); border: 1px solid var(--tile-border); color: var(--paper-dim);
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; text-decoration: none;
+    transition: border-color .15s, color .15s;
+  }
+  .back-btn:hover { border-color: var(--amber); color: var(--amber); }
   .eyebrow {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -58,8 +71,6 @@
     letter-spacing: 0.5px;
   }
   .stamp {
-    position: absolute;
-    top: 26px; right: 22px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
     letter-spacing: 0.12em;
@@ -224,9 +235,16 @@
 <body>
 <div class="stage">
   <div class="header">
+    <div class="header-top">
+      <a href="http://127.0.0.1:5500/wordhunter-Main%20Menu.html" class="back-btn" id="backBtn" title="Back to menu">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"></path>
+        </svg>
+      </a>
+      <div class="stamp">LIVE DEMO</div>
+    </div>
     <p class="eyebrow">Puzzle of the Day</p>
     <h1 class="title">Wordhunter</h1>
-    <div class="stamp">LIVE DEMO</div>
   </div>
 
   <div class="meta-row">
@@ -237,7 +255,7 @@
   </div>
 
   <div class="theme-banner">
-    <span id="themeLabel"></span>
+    <span id="themeLabel" style="visibility:hidden;">Theme: …</span>
     <span style="font-size:13px;" id="wordCount"></span>
   </div>
 
@@ -256,7 +274,10 @@
     <p class="big" id="solvedBig">Solved!</p>
     <div class="time" id="finalTime">00:00</div>
     <div class="fire">🔥 <span id="finalStreak">0</span></div>
-    <button onclick="resetGame()">Play again</button>
+    <div style="display:flex; gap:10px;">
+      <button onclick="resetGame()">Play again</button>
+      <a href="main-menu.html" class="practice-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Main menu</a>
+    </div>
   </div>
 
   <p class="api-note">Fill every slot — correctness is only checked once the whole board is full · tap a filled tile to send it back to the pool</p>
@@ -361,7 +382,10 @@ function showAlreadySolvedScreen(theme) {
       <p style="color:var(--paper); font-size:15px; line-height:1.6; margin:0 0 4px;">You already solved today's ${theme ? theme : 'puzzle'}.</p>
       <p style="color:var(--paper-dim); font-size:12px; margin:0 0 18px;">Next case in ${nextResetCountdown()}</p>
       <p style="color:var(--amber); font-size:13px; margin:0 0 22px;">🔥 Streak: ${streak}</p>
-      <button id="practiceAgainBtn" class="practice-btn">Practice again (won't count)</button>
+      <div style="display:flex; gap:10px; justify-content:center;">
+        <button id="practiceAgainBtn" class="practice-btn">Practice again (won't count)</button>
+        <a href="main-menu.html" class="practice-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Main menu</a>
+      </div>
     </div>`;
   document.getElementById('practiceAgainBtn').addEventListener('click', () => buildBoard());
 }
@@ -636,7 +660,9 @@ async function loadPuzzle() {
     PUZZLE = data.puzzle || data; // supports {theme, puzzle:[...]} or a bare array
 
     if (data.theme) {
-      document.getElementById('themeLabel').textContent = `Theme: ${data.theme}`;
+      const themeEl = document.getElementById('themeLabel');
+      themeEl.textContent = `Theme: ${data.theme}`;
+      themeEl.style.visibility = 'visible';
     }
 
     if (hasSolvedToday()) {
@@ -645,6 +671,9 @@ async function loadPuzzle() {
       buildBoard();
     }
   } catch (err) {
+    const themeEl = document.getElementById('themeLabel');
+    themeEl.textContent = 'Theme unavailable';
+    themeEl.style.visibility = 'visible';
     wordsEl.innerHTML = `
       <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--redact); line-height:1.6; padding:16px 0;">
         Couldn't load ${PUZZLE_SOURCE}.<br><br>
@@ -654,6 +683,16 @@ async function loadPuzzle() {
       </div>`;
   }
 }
+
+// Leaving mid-puzzle loses this attempt (partial progress isn't saved), so
+// confirm only when the timer has started and the puzzle isn't finished.
+document.getElementById('backBtn').addEventListener('click', (e) => {
+  const solvedShown = document.getElementById('solvedOverlay').classList.contains('show');
+  if (startTime && !solvedShown) {
+    const leave = confirm("Leave this puzzle? Your progress on this attempt won't be saved.");
+    if (!leave) e.preventDefault();
+  }
+});
 
 document.getElementById('streak').textContent = streak;
 loadPuzzle();

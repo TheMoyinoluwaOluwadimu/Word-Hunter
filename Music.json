@@ -4,7 +4,7 @@
   "source": "dictionaryapi.dev (primary) + datamuse md=d (fallback), auto-suggested chunks, human-reviewed",
   "puzzle": [
     {
-      "word": "A sequence of notes that makes up",
+      "word": "A sequence of notes that makes up a musical phrase",
       "answer": "melody",
       "chunks": [
         "me",
@@ -13,7 +13,7 @@
       ]
     },
     {
-      "word": "An extended piece of music of sophisticated",
+      "word": "An extended piece of music of sophisticated ",
       "answer": "symphony",
       "chunks": [
         "sy",
@@ -22,7 +22,7 @@
       ]
     },
     {
-      "word": "A large group of musicians who",
+      "word": "A large group of musicians who play together",
       "answer": "orchestra",
       "chunks": [
         "o",
@@ -31,7 +31,7 @@
       ]
     },
     {
-      "word": "A composer is a person who writes music.",
+      "word": "A person who writes music.",
       "answer": "composer",
       "chunks": [
         "co",
